@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Love Parkour Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      touch-action: none;
+    }
+
+    body {
+      overflow: hidden;
+      background: linear-gradient(to bottom, #ff9ecf, #ffe6f2);
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    canvas {
+      width: 100vw;
+      height: 75vh;
+      background: #dff6ff;
+      border: 4px solid #222;
+    }
+
+    .info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #111;
+      font-size: 16px;
+      font-weight: bold;
+      background: rgba(255,255,255,0.8);
+      padding: 8px 12px;
+      border-radius: 10px;
+      z-index: 10;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 20;
+    }
+
+    .left-controls,
+    .right-controls {
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 28px;
+      font-weight: bold;
+      user-select: none;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+      background: rgba(0,0,0,0.7);
+    }
+  </style>
+</head>
+<body>
+  <div class="info">
+    💖 Love Parkour • Thu thập trái tim để gặp người yêu 💖
+  </div>
+
+  <div class="controls">
+    <div class="left-controls">
+      <button class="btn" id="leftBtn">←</button>
+      <button class="btn" id="rightBtn">→</button>
+    </div>
+
+    <div class="right-controls">
+      <button class="btn" id="jumpBtn">↑</button>
+    </div>
+  </div>
+
+  <canvas id="game" width="1000" height="550"></canvas>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const gravity = 0.7;
+
+    const player = {
+      x: 80,
+      y: 200,
+      width: 40,
+      height: 40,
+      color: "#ff69b4",
+      velX: 0,
+      velY: 0,
+      speed: 5,
+      jumpPower: 14,
+      grounded: false
+    };
+
+    const keys = {};
+
+    const leftBtn = document.getElementById("leftBtn");
+    const rightBtn = document.getElementById("rightBtn");
+    const jumpBtn = document.getElementById("jumpBtn");
+
+    function bindButton(btn, key) {
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        keys[key] = true;
+      });
+
+      btn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        keys[key] = false;
+      });
+
+      btn.addEventListener("mousedown", () => {
+        keys[key] = true;
+      });
+
+      btn.addEventListener("mouseup", () => {
+        keys[key] = false;
+      });
+    }
+
+    bindButton(leftBtn, "ArrowLeft");
+    bindButton(rightBtn, "ArrowRight");
+    bindButton(jumpBtn, "Space");
+
+    let platforms = [
+      { x: 0, y: 500, width: 1000, height: 50 },
+      { x: 150, y: 430, width: 130, height: 20 },
+      { x: 340, y: 350, width: 140, height: 20 },
+      { x: 560, y: 280, width: 140, height: 20 },
+      { x: 760, y: 210, width: 150, height: 20 },
+      { x: 500, y: 150, width: 120, height: 20 }
+    ];
+
+    function loadLevel(lv) {
+      if (lv === 2) {
+        platforms = [
+          { x: 0, y: 500, width: 1000, height: 50 },
+          { x: 120, y: 420, width: 100, height: 20 },
+          { x: 300, y: 340, width: 100, height: 20 },
+          { x: 480, y: 260, width: 100, height: 20 },
+          { x: 650, y: 180, width: 100, height: 20 },
+          { x: 820, y: 110, width: 120, height: 20 }
+        ];
+
+        hearts = [
+          { x: 150, y: 380, collected: false },
+          { x: 330, y: 300, collected: false },
+          { x: 510, y: 220, collected: false },
+          { x: 850, y: 70, collected: false }
+        ];
+
+        finish.x = 900;
+        finish.y = 40;
+      }
+
+      if (lv === 3) {
+        gameWon = true;
+      }
+    }
+
+    let hearts = [
+      { x: 190, y: 390, collected: false },
+      { x: 390, y: 310, collected: false },
+      { x: 610, y: 240, collected: false },
+      { x: 810, y: 170, collected: false }
+    ];
+
+    const finish = {
+      x: 900,
+      y: 130,
+      width: 60,
+      height: 80
+    };
+
+    let score = 0;
+    let level = 1;
+    let gameWon = false;
+
+    document.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+    });
+
+    document.addEventListener("keyup", (e) => {
+      keys[e.code] = false;
+    });
+
+    function collision(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      );
+    }
+
+    function update() {
+      // Movement
+      if (keys["ArrowRight"] || keys["KeyD"]) {
+        player.velX = player.speed;
+      } else if (keys["ArrowLeft"] || keys["KeyA"]) {
+        player.velX = -player.speed;
+      } else {
+        player.velX *= 0.8;
+      }
+
+      // Jump
+      if ((keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) && player.grounded) {
+        player.velY = -player.jumpPower;
+        player.grounded = false;
+      }
+
+      player.velY += gravity;
+
+      player.x += player.velX;
+      player.y += player.velY;
+
+      player.grounded = false;
+
+      // Platform collision
+      for (let p of platforms) {
+        if (collision(player, p)) {
+          // Landing on top
+          if (player.velY >= 0 && player.y + player.height - player.velY <= p.y) {
+            player.y = p.y - player.height;
+            player.velY = 0;
+            player.grounded = true;
+          }
+        }
+      }
+
+      // Borders
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width)
+        player.x = canvas.width - player.width;
+
+      // Fall reset
+      if (player.y > canvas.height + 200) {
+        player.x = 80;
+        player.y = 200;
+        player.velY = 0;
+      }
+
+      // Collect hearts
+      hearts.forEach((heart) => {
+        if (!heart.collected && collision(player, {
+          x: heart.x,
+          y: heart.y,
+          width: 30,
+          height: 30
+        })) {
+          heart.collected = true;
+          score++;
+        }
+      });
+
+      // Win
+      if (collision(player, finish) && score === hearts.length) {
+        if (level === 1) {
+          alert("💘 Qua màn 2! Tình yêu ngày càng mạnh hơn!");
+          level = 2;
+          score = 0;
+          player.x = 80;
+          player.y = 200;
+          loadLevel(level);
+        } else if (level === 2) {
+          alert("👑 YOU WIN! Bên nhau mãi mãi 💖");
+          level = 3;
+          loadLevel(level);
+        }
+      }
+    }
+
+    function drawPlayer() {
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Eyes
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fillRect(player.x + 8, player.y + 10, 6, 6);
+      ctx.fillRect(player.x + 24, player.y + 10, 6, 6);
+    }
+
+    function drawPlatforms() {
+      for (let p of platforms) {
+        ctx.fillStyle = "#2ed573";
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+      }
+    }
+
+    function drawFinish() {
+      ctx.font = "60px Arial";
+      ctx.fillText("😍", finish.x, finish.y + 60);
+    }
+
+    function drawHearts() {
+      ctx.font = "28px Arial";
+
+      hearts.forEach((heart) => {
+        if (!heart.collected) {
+          ctx.fillText("💖", heart.x, heart.y);
+        }
+      });
+
+      ctx.fillStyle = "#ff1493";
+      ctx.font = "24px Arial";
+      ctx.fillText("Trái tim: " + score + "/" + hearts.length, 20, 50);
+    }
+
+    function drawWinScreen() {
+      ctx.fillStyle = "#ffb6d9";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#d1006f";
+      ctx.font = "60px Arial";
+      ctx.fillText("💖 YOU WIN 💖", 300, 220);
+
+      ctx.font = "32px Arial";
+      ctx.fillText("Chúc em buổi tối vui vẻ nháaa! Hun em 100 cái.", 180, 300);
+
+      ctx.font = "28px Arial";
+      ctx.fillText("Yêu em💕", 240, 360);
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#ffd6e7";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Clouds
+      ctx.fillStyle = "white";
+      ctx.beginPath();
+      ctx.arc(150, 90, 30, 0, Math.PI * 2);
+      ctx.arc(180, 90, 40, 0, Math.PI * 2);
+      ctx.arc(220, 90, 30, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(700, 70, 25, 0, Math.PI * 2);
+      ctx.arc(730, 70, 35, 0, Math.PI * 2);
+      ctx.arc(770, 70, 25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function gameLoop() {
+      if (gameWon) {
+        drawWinScreen();
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      update();
+      drawBackground();
+      drawPlatforms();
+      drawHearts();
+      drawFinish();
+      drawPlayer();
+
+      ctx.fillStyle = "#d1006f";
+      ctx.font = "22px Arial";
+      ctx.fillText("Màn: " + level, 20, 80);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
